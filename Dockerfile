@@ -21,10 +21,13 @@ RUN composer install --no-dev --optimize-autoloader
 # Build frontend assets
 RUN npm install && npm run build
 
-# Cache config
-RUN php artisan config:cache
+# ✅ Clear Laravel caches so runtime env vars are used
+RUN php artisan config:clear \
+    && php artisan cache:clear \
+    && php artisan route:clear \
+    && php artisan view:clear
 
-# Expose port 8000
+# Expose port 8000 (matches Container App ingress)
 EXPOSE 8000
 
 # Start Laravel with Artisan
