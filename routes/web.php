@@ -20,24 +20,31 @@ Route::middleware('auth')->group(function () {
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
 
+
 Route::get('/debug-db', function () {
-    $status = null;
+    $dbCheck = '';
+    $queryResult = null;
 
     try {
-        DB::connection()->getPdo();
-        $status = '✅ Connection OK';
+        // Try connecting to DB
+        $pdo = DB::connection()->getPdo();
+        $dbCheck = '✅ Connection OK';
+
+        // Run a simple test query
+        $queryResult = DB::select('select 1 as test');
     } catch (\Exception $e) {
-        $status = '❌ ' . $e->getMessage();
+        $dbCheck = '❌ ' . $e->getMessage();
     }
 
     return response()->json([
-        'DATABASE_URL' => env('DATABASE_URL'),
-        'DB_HOST'      => env('DB_HOST'),
-        'DB_DATABASE'  => env('DB_DATABASE'),
-        'DB_USERNAME'  => env('DB_USERNAME'),
-        'DB_SSLMODE'   => env('DB_SSLMODE'),
-        'DB_CONFIG'    => Config::get('database.connections.pgsql'),
-        'DB_CHECK'     => $status,
+        'DB_HOST'     => config('database.connections.pgsql.host'),
+        'DB_DATABASE' => config('database.connections.pgsql.database'),
+        'DB_USERNAME' => config('database.connections.pgsql.username'),
+        'DB_PASSWORD' => config('database.connections.pgsql.password'),
+        'DB_SSLMODE'  => config('database.connections.pgsql.sslmode'),
+        'DB_CONFIG'   => Config::get('database.connections.pgsql'),
+        'DB_CHECK'    => $dbCheck,
+        'TEST_QUERY'  => $queryResult,
     ]);
 });
 

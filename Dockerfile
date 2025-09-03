@@ -28,8 +28,8 @@ EXPOSE 8000
 COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-# Use entrypoint script
+# Use entrypoint
 ENTRYPOINT ["docker-entrypoint.sh"]
 
-# Start Laravel
+# Start Laravel with Artisan
 CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000"]

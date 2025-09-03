@@ -6,11 +6,12 @@ services:
       - "8000:8000"
     environment:
       DB_CONNECTION: pgsql
-      DB_HOST: db
+      DB_HOST: db        # ✅ not 127.0.0.1
       DB_PORT: 5432
       DB_DATABASE: productviewer
       DB_USERNAME: productuser
       DB_PASSWORD: Shiftmate@123
+      DB_SSLMODE: prefer
     depends_on:
       - db
 
