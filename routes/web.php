@@ -31,14 +31,16 @@ Route::get('/debug-db', function () {
     }
 
     return response()->json([
-        'DB_HOST'     => env('DB_HOST'),
-        'DB_DATABASE' => env('DB_DATABASE'),
-        'DB_USERNAME' => env('DB_USERNAME'),
-        'DB_SSLMODE'  => env('DB_SSLMODE'),
-        'DB_CONFIG'   => Config::get('database.connections.pgsql'),
-        'DB_CHECK'    => $status,
+        'DATABASE_URL' => env('DATABASE_URL'),
+        'DB_HOST'      => env('DB_HOST'),
+        'DB_DATABASE'  => env('DB_DATABASE'),
+        'DB_USERNAME'  => env('DB_USERNAME'),
+        'DB_SSLMODE'   => env('DB_SSLMODE'),
+        'DB_CONFIG'    => Config::get('database.connections.pgsql'),
+        'DB_CHECK'     => $status,
     ]);
 });
+
 
 Route::get('/products', [ProductController::class, 'index'])->middleware('auth');
 
