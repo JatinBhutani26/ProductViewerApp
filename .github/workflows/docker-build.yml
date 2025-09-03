@@ -1,0 +1,37 @@
+name: Build and Push Docker Image to ACR
+
+on:
+  workflow_dispatch:   # Manual trigger
+  push:
+    tags:
+      - 'v*'           # Trigger only on version tags like v1, v1.0, v2.3.1
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Log in to Azure
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Log in to ACR
+        run: |
+          az acr login --name ${{ secrets.ACR_NAME }}
+
+      - name: Build and Push Docker image
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          IMAGE=${{ secrets.ACR_NAME }}.azurecr.io/productviewer:$VERSION
+          echo "Building image $IMAGE"
+          docker build -t $IMAGE .
+          docker push $IMAGE
+
+          # Also tag as latest
+          LATEST=${{ secrets.ACR_NAME }}.azurecr.io/productviewer:latest
+          docker tag $IMAGE $LATEST
+          docker push $LATEST
