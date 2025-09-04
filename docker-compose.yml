@@ -5,6 +5,7 @@ services:
     ports:
       - "8000:8000"
     environment:
+      APP_ENV: local
       DB_CONNECTION: pgsql
       DB_HOST: db        # ✅ not 127.0.0.1
       DB_PORT: 5432
