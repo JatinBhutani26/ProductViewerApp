@@ -6,12 +6,11 @@
     <title>{{ $title ?? config('app.name', 'Laravel') }}</title>
     @vite(['resources/css/app.css','resources/js/app.js'])
 </head>
-<body class="font-sans antialiased bg-gray-100 text-gray-900">
-    {{-- Optional top nav --}}
+<body class="font-sans antialiased bg-gray-900 text-gray-100">
     @includeIf('layouts.navigation')
 
-    <header class="bg-white border-b">
-        <div class="max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8">
+    <header class="bg-gray-800 border-b border-gray-700">
+        <div class="max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8 text-white">
             {{ $header ?? '' }}
         </div>
     </header>
