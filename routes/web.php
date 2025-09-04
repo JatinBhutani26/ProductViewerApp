@@ -5,6 +5,8 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\ProductController;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Schema;
+use App\Models\Product;
 
 Route::get('/', function () {
     return view('welcome');
@@ -48,7 +50,47 @@ Route::get('/debug-db', function () {
     ]);
 });
 
+Route::get('/debug-products', function () {
+    $info = [
+        'database'         => DB::getDatabaseName(),
+        'user'             => DB::selectOne('select current_user as u')->u ?? null,
+        'schema'           => DB::selectOne('select current_schema as s')->s ?? null,
+        'search_path'      => DB::selectOne('show search_path')->search_path ?? null,
+        'products_table?'  => Schema::hasTable('products'),
+        'products_count'   => null,
+        'products_any_row' => null,
+        'soft_deleted_cnt' => null,
+        'raw_count'        => null,
+    ];
 
-Route::get('/products', [ProductController::class, 'index'])->middleware('auth');
+    // raw count (bypasses Eloquent/scopes)
+    try {
+        $info['raw_count'] = DB::selectOne('select count(*)::int as c from products')->c;
+    } catch (\Throwable $e) {
+        $info['raw_count'] = 'ERR: ' . $e->getMessage();
+    }
+
+    // eloquent (with scopes)
+    try {
+        $info['products_count'] = Product::count();
+        $info['soft_deleted_cnt'] = method_exists(Product::class, 'bootSoftDeletes')
+            ? Product::withTrashed()->count() - Product::count()
+            : 0;
+        $info['products_any_row'] = Product::first();
+    } catch (\Throwable $e) {
+        $info['products_count'] = 'ERR: ' . $e->getMessage();
+    }
+
+    // connection URL seen by app (helpful when config is cached)
+    $info['DATABASE_URL'] = env('DATABASE_URL');
+
+    return response()->json($info);
+});
+
+Route::middleware('auth')->group(function () {
+    Route::get('/products', [ProductController::class, 'index'])->name('products.index');
+    Route::get('/products/create', [ProductController::class, 'create'])->name('products.create');
+    Route::post('/products', [ProductController::class, 'store'])->name('products.store');
+});
 
 require __DIR__.'/auth.php';
