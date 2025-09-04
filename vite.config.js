@@ -5,7 +5,7 @@ import laravel from 'laravel-vite-plugin'
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   // Ensure trailing slash if ASSET_URL is set
-  const base = env.ASSET_URL ? `${env.ASSET_URL.replace(/\/$/, '')}/` : '/'
+  const base = env.ASSET_URL ? env.ASSET_URL.replace(/\/$/,'')+'/' : '/'
 
   return {
     base,
