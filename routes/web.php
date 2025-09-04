@@ -43,6 +43,18 @@ Route::get('/debug-db', function () {
     ]);
 });
 
+Route::get('/debug-env', function () {
+   return response()->json([
+        'APP_URL'     => config('app.url'),
+        'ASSET_URL' => config('app.asset_url'),
+        'SESSION_SECURE_COOKIE' => config('session.secure'),
+        'SESSION_PATH' => config('session.path'),
+        'SESSION_DOMAIN'  => config('session.domain'),
+        'Current url'   => url()->current(),
+        'TRUSTED_PROXIES'   => request()->getTrustedProxies()
+    ]);
+});
+
 Route::get('/debug-products', function () {
     $info = [
         'database'         => DB::getDatabaseName(),
