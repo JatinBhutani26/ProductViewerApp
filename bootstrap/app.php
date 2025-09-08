@@ -7,89 +7,110 @@ use Symfony\Component\HttpFoundation\Request;
 
 /*
 |--------------------------------------------------------------------------
-| Trusted proxies configuration
+| Trusted proxies + forwarded headers
 |--------------------------------------------------------------------------
 |
-| Allows configuration via environment variables:
-|  - TRUSTED_PROXIES (comma separated IPs or "*" for all)
-|  - TRUSTED_HEADERS (one of: "FORWARDED", "X_FORWARDED_ALL", default "X_FORWARDED_ALL")
+| - Reads TRUSTED_PROXIES (comma separated or "*") and TRUSTED_HEADERS env vars.
+| - Calls Request::setTrustedProxies early to allow Symfony to use X-Forwarded-*.
+| - As a fallback, if APIM has set X-Forwarded-Host / X-Forwarded-Proto we
+|   override $_SERVER values so URL generation uses the APIM host/scheme.
 |
-| We avoid direct static references to Request::HEADER_* constants so the
-| static analyzer (Intelephense) doesn't complain and so code runs across
-| different Symfony versions.
+| Keep this minimal and safe for static analyzers (avoid direct undefined constants).
 |
 */
 
 $trustedProxiesEnv = env('TRUSTED_PROXIES', '*');
-
-if ($trustedProxiesEnv === '*' || trim($trustedProxiesEnv) === '') {
-    // Trust all proxies
-    $trustedProxies = ['0.0.0.0/0'];
-} else {
-    $trustedProxies = array_map('trim', explode(',', $trustedProxiesEnv));
-}
-
-// Normalize header env name
 $trustedHeadersEnv = strtoupper(trim(env('TRUSTED_HEADERS', 'X_FORWARDED_ALL')));
 
-// Helper to safely check and read a class constant by name
-$constName = function (string $class, string $constant) {
-    $full = $class . '::' . $constant;
-    return defined($full) ? constant($full) : null;
+// Build trusted proxies array
+if ($trustedProxiesEnv === '*' || trim($trustedProxiesEnv) === '') {
+    $trustedProxies = ['0.0.0.0/0'];
+} else {
+    $trustedProxies = array_filter(array_map('trim', explode(',', $trustedProxiesEnv)));
+}
+
+// Helper to read a class constant if it exists
+$const = function (string $class, string $name) {
+    $fullname = $class . '::' . $name;
+    return defined($fullname) ? constant($fullname) : null;
 };
 
-// Build header flags using available constants (safe)
-$header_forwarded = $constName(Request::class, 'HEADER_FORWARDED');
-$header_x_forwarded_for = $constName(Request::class, 'HEADER_X_FORWARDED_FOR');
-$header_x_forwarded_host = $constName(Request::class, 'HEADER_X_FORWARDED_HOST');
-$header_x_forwarded_port = $constName(Request::class, 'HEADER_X_FORWARDED_PORT');
-$header_x_forwarded_proto = $constName(Request::class, 'HEADER_X_FORWARDED_PROTO');
-$header_x_forwarded_all = $constName(Request::class, 'HEADER_X_FORWARDED_ALL');
+// Resolve Symfony Request header flags safely
+$h_forwarded = $const(Request::class, 'HEADER_FORWARDED');
+$h_x_forw_for = $const(Request::class, 'HEADER_X_FORWARDED_FOR');
+$h_x_forw_host = $const(Request::class, 'HEADER_X_FORWARDED_HOST');
+$h_x_forw_port = $const(Request::class, 'HEADER_X_FORWARDED_PORT');
+$h_x_forw_proto = $const(Request::class, 'HEADER_X_FORWARDED_PROTO');
+$h_x_forw_all = $const(Request::class, 'HEADER_X_FORWARDED_ALL');
 
-// Compose a fallback bitmask for x-forwarded-all if not present
-$composed_x_forwarded_all = 0;
-foreach ([
-    $header_x_forwarded_for,
-    $header_x_forwarded_host,
-    $header_x_forwarded_port,
-    $header_x_forwarded_proto,
-] as $h) {
-    if (is_int($h)) {
-        $composed_x_forwarded_all |= $h;
+// Compose an "X_FORWARDED_ALL" fallback if the constant is not available
+$composed_x_all = 0;
+foreach ([$h_x_forw_for, $h_x_forw_host, $h_x_forw_port, $h_x_forw_proto] as $v) {
+    if (is_int($v)) {
+        $composed_x_all |= $v;
     }
 }
 
-// Decide final header flag value
-if ($trustedHeadersEnv === 'FORWARDED' && is_int($header_forwarded)) {
-    $trustedHeaders = $header_forwarded;
+// Decide header flags per env
+if ($trustedHeadersEnv === 'FORWARDED' && is_int($h_forwarded)) {
+    $trustedHeaders = $h_forwarded;
 } elseif ($trustedHeadersEnv === 'X_FORWARDED_ALL') {
-    // Prefer the explicit constant if available, otherwise use composed fallback
-    $trustedHeaders = is_int($header_x_forwarded_all) ? $header_x_forwarded_all : $composed_x_forwarded_all;
+    $trustedHeaders = is_int($h_x_forw_all) ? $h_x_forw_all : $composed_x_all;
 } else {
-    // Any other value: try to resolve to X_FORWARDED_ALL fallback
-    $trustedHeaders = is_int($header_x_forwarded_all) ? $header_x_forwarded_all : $composed_x_forwarded_all;
+    // default fallback: use X_FORWARDED_ALL (explicit or composed)
+    $trustedHeaders = is_int($h_x_forw_all) ? $h_x_forw_all : $composed_x_all;
 }
 
-// If still zero / null, default to trusting FORWARDED plus X-Forwarded-For variety (best-effort)
-if (empty($trustedHeaders) && is_int($header_forwarded)) {
-    $trustedHeaders = $header_forwarded;
-} elseif (empty($trustedHeaders)) {
-    // Prevent passing null/false to setTrustedProxies; use 0 which will be ignored
+// Ensure $trustedHeaders is an int (or 0)
+if (!is_int($trustedHeaders)) {
     $trustedHeaders = 0;
 }
 
-// Finally apply trusted proxies/headers (Symfony Request API)
+// Apply trusted proxies (do not fatal if something goes wrong)
 try {
-    // Request::setTrustedProxies expects array|string and int (flags)
+    // Note: Request::setTrustedProxies accepts array|string and int flags
     Request::setTrustedProxies($trustedProxies, $trustedHeaders);
 } catch (Throwable $e) {
-    // If something goes wrong, we still continue — don't break the boot sequence.
-    // You can log here if desired (but bootstrap is early; avoid heavy I/O).
+    // swallow: bootstrap should not throw hard errors here
 }
 
 /*
 |--------------------------------------------------------------------------
-| Build the application
+| Fallback: ensure PHP server variables reflect forwarded Host / Proto
+|--------------------------------------------------------------------------
+|
+| Some frameworks or URL generation may read $_SERVER before Symfony rewrites
+| them. As a last-resort, if APIM set X-Forwarded-Host / X-Forwarded-Proto,
+| override $_SERVER so url() and asset() functions produce APIM URLs.
+|
+*/
+$xfh = $_SERVER['HTTP_X_FORWARDED_HOST'] ?? $_SERVER['HTTP_X_FORWARDED_HOST'] ?? null;
+$xfp = $_SERVER['HTTP_X_FORWARDED_PROTO'] ?? $_SERVER['HTTP_X_FORWARDED_PROTO'] ?? null;
+
+if (!empty($xfh)) {
+    // If there are multiple hosts (comma list), take the first (left-most) per RFC
+    $firstHost = trim(explode(',', $xfh)[0]);
+    if ($firstHost !== '') {
+        $_SERVER['HTTP_HOST'] = $firstHost;
+        // also update SERVER_NAME
+        $_SERVER['SERVER_NAME'] = $firstHost;
+    }
+}
+
+if (!empty($xfp)) {
+    $proto = strtolower(trim(explode(',', $xfp)[0]));
+    if ($proto === 'https') {
+        $_SERVER['HTTPS'] = 'on';
+        $_SERVER['SERVER_PORT'] = '443';
+    } elseif ($proto === 'http') {
+        unset($_SERVER['HTTPS']);
+        $_SERVER['SERVER_PORT'] = '80';
+    }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Build the application (keep your app structure unchanged)
 |--------------------------------------------------------------------------
 */
 return Application::configure(basePath: dirname(__DIR__))
