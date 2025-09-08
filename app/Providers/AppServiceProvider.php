@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\URL;
+use Illuminate\Http\Request; // for setTrustedProxies
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -38,6 +39,17 @@ class AppServiceProvider extends ServiceProvider
         $xfHost   = !empty($_SERVER['HTTP_X_FORWARDED_HOST']) ? $_SERVER['HTTP_X_FORWARDED_HOST'] : ( !empty($_SERVER['X_FORWARDED_HOST']) ? $_SERVER['X_FORWARDED_HOST'] : null );
         $xfProto  = !empty($_SERVER['HTTP_X_FORWARDED_PROTO']) ? $_SERVER['HTTP_X_FORWARDED_PROTO'] : ( !empty($_SERVER['X_FORWARDED_PROTO']) ? $_SERVER['X_FORWARDED_PROTO'] : null );
         $xfPrefix = !empty($_SERVER['HTTP_X_FORWARDED_PREFIX']) ? $_SERVER['HTTP_X_FORWARDED_PREFIX'] : ( !empty($_SERVER['X_FORWARDED_PREFIX']) ? $_SERVER['X_FORWARDED_PREFIX'] : null );
+
+        // Only enable trusting proxies when we detect forwarded headers present (keeps local env safe)
+        if ($xfHost || $xfProto || $xfPrefix) {
+            // Trust all proxies here so Laravel/Symfony will respect X-Forwarded-* headers from APIM.
+            // You can tighten this to specific IP ranges in production if desired.
+            // Use numeric mask 31 (0x1F) which is the equivalent of HEADER_X_FORWARDED_ALL.
+            Request::setTrustedProxies(
+                ['0.0.0.0/0'],
+                31
+            );
+        }
 
         if ($xfHost) {
             // prefer the forwarded proto if present, else infer from SERVER_PORT / HTTPS, else default to https
