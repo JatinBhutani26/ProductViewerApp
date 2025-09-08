@@ -98,4 +98,12 @@ Route::middleware('auth')->group(function () {
     Route::post('/products', [ProductController::class, 'store'])->name('products.store');
 });
 
+Route::get('/debug-headers', function () {
+    return response()->json([
+        'server'  => $_SERVER,
+        'headers' => request()->headers->all(),
+        'client_ip' => request()->getClientIp(),
+    ]);
+});
+
 require __DIR__.'/auth.php';
