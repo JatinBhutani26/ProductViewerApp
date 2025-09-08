@@ -20,8 +20,20 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-       if (app()->environment() !== 'local') {
-            URL::forceScheme('https');
+       $root = env('APP_URL') ?: env('ASSET_URL') ?: env('APP_URL');
+
+        if ($root) {
+            // Ensure no trailing slash
+            $root = rtrim($root, '/');
+
+            // Force the URL generator to use this root for url(), route(), action() helpers
+            URL::forceRootUrl($root);
+
+            // Force scheme (http/https) if it's part of the root URL
+            $scheme = parse_url($root, PHP_URL_SCHEME);
+            if ($scheme) {
+                URL::forceScheme($scheme);
+            }
         }
     }
 }
