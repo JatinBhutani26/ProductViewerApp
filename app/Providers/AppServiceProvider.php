@@ -75,7 +75,22 @@ class AppServiceProvider extends ServiceProvider
                 $prefix = '';
             }
 
-            $root = $proto . '://' . $host . ($prefix !== '' ? $prefix : '');
+            // --- NEW: If APIM provided a prefix AND APP_URL env has the same prefix, prefer APP_URL
+            $envAppUrl = env('APP_URL') ? rtrim(env('APP_URL'), '/') : null;
+            if ($xfPrefix && $envAppUrl) {
+                $envPath = parse_url($envAppUrl, PHP_URL_PATH) ?: '';
+                $envPathTrim = trim($envPath, '/');
+                $prefixTrim = trim($prefix, '/');
+
+                // if the APP_URL's path equals the forwarded prefix (e.g. both 'app'), use APP_URL to avoid double-prefix
+                if ($envPathTrim !== '' && $envPathTrim === $prefixTrim) {
+                    $root = $envAppUrl;
+                } else {
+                    $root = $proto . '://' . $host . ($prefix !== '' ? $prefix : '');
+                }
+            } else {
+                $root = $proto . '://' . $host . ($prefix !== '' ? $prefix : '');
+            }
         }
 
         // 2) fallback to ASSET_URL then APP_URL from env
